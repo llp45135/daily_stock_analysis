@@ -88,14 +88,18 @@ class LLMToolAdapter:
             except Exception as e:
                 logger.warning(f"Agent LLM: Gemini init failed: {e}")
 
-        # Anthropic
-        anthropic_key = config.anthropic_api_key
+        # Anthropic (or compatible provider like MiniMax)
+        anthropic_key = config.anthropic_api_key or config.anthropic_auth_token
         if anthropic_key and not anthropic_key.startswith("your_") and len(anthropic_key) > 10:
             try:
                 from anthropic import Anthropic
-                self._anthropic_client = Anthropic(api_key=anthropic_key)
+                client_kwargs = {"api_key": anthropic_key}
+                # Support custom base URL for compatible providers (e.g., MiniMax)
+                if config.anthropic_base_url:
+                    client_kwargs["base_url"] = config.anthropic_base_url
+                self._anthropic_client = Anthropic(**client_kwargs)
                 self._anthropic_available = True
-                logger.info("Agent LLM: Anthropic initialized")
+                logger.info(f"Agent LLM: Anthropic initialized (base_url={config.anthropic_base_url})")
             except Exception as e:
                 logger.warning(f"Agent LLM: Anthropic init failed: {e}")
 
@@ -439,7 +443,7 @@ class LLMToolAdapter:
                 })
 
         call_kwargs = {
-            "model": config.anthropic_model or "claude-sonnet-4-20250514",
+            "model": config.anthropic_default_opus_model or config.anthropic_model or "claude-sonnet-4-20250514",
             "max_tokens": config.anthropic_max_tokens or 8192,
             "messages": anthropic_messages,
             "temperature": config.anthropic_temperature,
@@ -451,13 +455,16 @@ class LLMToolAdapter:
 
         response = self._anthropic_client.messages.create(**call_kwargs)
 
-        # Parse response
+        # Parse response (支持 Anthropic, MiniMax 等多种响应格式)
         tool_calls = []
         text_content = None
 
         for block in response.content:
             if block.type == "text":
                 text_content = (text_content or "") + block.text
+            elif block.type == "thinking":
+                # MiniMax 等返回 thinking block
+                text_content = (text_content or "") + (block.thinking or "")
             elif block.type == "tool_use":
                 tool_calls.append(ToolCall(
                     id=block.id,

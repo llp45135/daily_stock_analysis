@@ -75,6 +75,9 @@ class Config:
     anthropic_model: str = "claude-3-5-sonnet-20241022"  # Claude model name
     anthropic_temperature: float = 0.7  # Anthropic temperature (0.0-1.0, default 0.7)
     anthropic_max_tokens: int = 8192  # Max tokens for Anthropic responses
+    anthropic_base_url: Optional[str] = None  # Custom API base URL (e.g., for MiniMax)
+    anthropic_auth_token: Optional[str] = None  # Auth token for custom providers (e.g., MiniMax)
+    anthropic_default_opus_model: Optional[str] = None  # Default model for Opus tier (e.g., MiniMax-M2.5)
 
     # OpenAI 兼容 API（备选，当 Gemini/Anthropic 不可用时使用）
     openai_api_key: Optional[str] = None
@@ -396,6 +399,9 @@ class Config:
             anthropic_model=os.getenv('ANTHROPIC_MODEL', 'claude-3-5-sonnet-20241022'),
             anthropic_temperature=float(os.getenv('ANTHROPIC_TEMPERATURE', '0.7')),
             anthropic_max_tokens=int(os.getenv('ANTHROPIC_MAX_TOKENS', '8192')),
+            anthropic_base_url=os.getenv('ANTHROPIC_BASE_URL'),
+            anthropic_auth_token=os.getenv('ANTHROPIC_AUTH_TOKEN'),
+            anthropic_default_opus_model=os.getenv('ANTHROPIC_DEFAULT_OPUS_MODEL'),
             openai_api_key=os.getenv('OPENAI_API_KEY'),
             openai_base_url=os.getenv('OPENAI_BASE_URL'),
             openai_model=os.getenv('OPENAI_MODEL', 'gpt-4o-mini'),

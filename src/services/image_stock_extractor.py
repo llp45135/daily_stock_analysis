@@ -164,9 +164,13 @@ def _call_anthropic(image_b64: str, mime_type: str) -> str:
     from anthropic import Anthropic
 
     cfg = get_config()
-    client = Anthropic(api_key=cfg.anthropic_api_key, timeout=VISION_API_TIMEOUT)
+    anthropic_key = cfg.anthropic_api_key or cfg.anthropic_auth_token
+    client_kwargs = {"api_key": anthropic_key, "timeout": VISION_API_TIMEOUT}
+    if cfg.anthropic_base_url:
+        client_kwargs["base_url"] = cfg.anthropic_base_url
+    client = Anthropic(**client_kwargs)
     msg = client.messages.create(
-        model=cfg.anthropic_model,
+        model=cfg.anthropic_default_opus_model or cfg.anthropic_model,
         max_tokens=1024,
         messages=[
             {

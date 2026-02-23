@@ -565,10 +565,11 @@ class GeminiAnalyzer:
         使用 Anthropic Messages API：https://docs.anthropic.com/en/api/messages
         """
         config = get_config()
+        anthropic_key = config.anthropic_api_key or config.anthropic_auth_token
         anthropic_key_valid = (
-            config.anthropic_api_key
-            and not config.anthropic_api_key.startswith('your_')
-            and len(config.anthropic_api_key) > 10
+            anthropic_key
+            and not anthropic_key.startswith('your_')
+            and len(anthropic_key) > 10
         )
         if not anthropic_key_valid:
             logger.debug("Anthropic API Key not configured or invalid")
@@ -576,8 +577,11 @@ class GeminiAnalyzer:
         try:
             from anthropic import Anthropic
 
-            self._anthropic_client = Anthropic(api_key=config.anthropic_api_key)
-            self._current_model_name = config.anthropic_model
+            client_kwargs = {"api_key": anthropic_key}
+            if config.anthropic_base_url:
+                client_kwargs["base_url"] = config.anthropic_base_url
+            self._anthropic_client = Anthropic(**client_kwargs)
+            self._current_model_name = config.anthropic_default_opus_model or config.anthropic_model
             self._use_anthropic = True
             logger.info(
                 f"Anthropic Claude API init OK (model: {config.anthropic_model})"
@@ -756,12 +760,21 @@ class GeminiAnalyzer:
                     messages=[{"role": "user", "content": prompt}],
                     temperature=temperature,
                 )
-                if (
-                    message.content
-                    and len(message.content) > 0
-                    and hasattr(message.content[0], 'text')
-                ):
-                    return message.content[0].text
+                # 支持多种响应块类型 (Anthropic, MiniMax 等)
+                if message.content and len(message.content) > 0:
+                    for block in message.content:
+                        # TextBlock (标准 Anthropic)
+                        if hasattr(block, 'text'):
+                            return block.text
+                        # ThinkingBlock (MiniMax 等)
+                        if hasattr(block, 'thinking'):
+                            return block.thinking
+                        # 通用字典格式
+                        if isinstance(block, dict):
+                            if block.get('type') == 'text':
+                                return block.get('text', '')
+                            if block.get('type') == 'thinking':
+                                return block.get('thinking', '')
                 raise ValueError("Anthropic API returned empty response")
             except Exception as e:
                 error_str = str(e)
@@ -979,7 +992,8 @@ class GeminiAnalyzer:
                 logger.error(f"[OpenAI] Fallback also failed: {openai_error}")
                 raise last_error or openai_error
         # 懒加载 Anthropic，再尝试 OpenAI
-        if config.anthropic_api_key and not self._anthropic_client:
+        anthropic_key = config.anthropic_api_key or config.anthropic_auth_token
+        if anthropic_key and not self._anthropic_client:
             logger.warning("[Gemini] Trying lazy-init Anthropic API")
             self._init_anthropic_fallback()
             if self._anthropic_client:
